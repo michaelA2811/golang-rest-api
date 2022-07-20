@@ -30,15 +30,15 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetOrder(w http.ResponseWriter, r *http.Request) {
-	order := entity.Orders{}
+	order := []entity.Orders{}
 	db := config.Connect()
-	result := db.Preload("Items").Find(&order).Error
+	result := db.Model(&entity.Orders{}).Preload("Items").Find(&order).Error
 	if result != nil {
 		responseOrderReturn(500, "Order not Found", []entity.Orders{}, w)
 	}
 	fmt.Println(result)
 	// res, _ := json.Marshal(order)
-	// responseOrderReturn(200, "Order Created", order, w)
+	responseOrderReturn(200, "Order Created", order, w)
 }
 
 func UpdateOrder(w http.ResponseWriter, r *http.Request) {
