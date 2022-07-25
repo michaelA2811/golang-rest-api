@@ -18,7 +18,6 @@ func AllUser(w http.ResponseWriter, r *http.Request) {
 	var arrUser []entity.User
 
 	db := config.Connect()
-	defer db.Close()
 
 	rows, err := db.Query("SELECT id,username,email,password,age FROM users")
 	if err != nil {
@@ -81,7 +80,6 @@ func NewUser(w http.ResponseWriter, r *http.Request) {
 	var response entity.Response
 
 	db := config.Connect()
-	defer db.Close()
 
 	err := r.ParseMultipartForm(4096)
 	if err != nil {
@@ -108,36 +106,23 @@ func NewUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteUser(w http.ResponseWriter, r *http.Request) {
-	var response entity.Response
 	userId := mux.Vars(r)["id"]
 	id, _ := strconv.Atoi(userId)
 
 	db := config.Connect()
 	defer db.Close()
 
-	err := r.ParseMultipartForm(4096)
-
-	if err != nil {
-		panic(err)
-	}
-
-	_, err = db.Exec("DELETE FROM users WHERE id=?", id)
+	_, err := db.Exec("DELETE FROM users WHERE id=?", id)
 
 	if err != nil {
 		log.Print(err)
-		return
+		responseReturn(200, "Error Delete User", []entity.User{}, w)
 	}
 
-	response.Status = 200
-	response.Message = "Delete data successfully"
-	fmt.Print("Delete data successfully")
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	responseReturn(200, "Success Delete User", []entity.User{}, w)
 }
 
 func UpdateUser(w http.ResponseWriter, r *http.Request) {
-	var response entity.Response
 	userId := mux.Vars(r)["id"]
 	id, _ := strconv.Atoi(userId)
 
@@ -167,14 +152,15 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		log.Print(err)
+		responseReturn(500, "Error Update User", []entity.User{}, w)
 	}
+	responseReturn(200, "Success Update User", []entity.User{}, w)
 
-	response.Status = 200
-	response.Message = "Update data successfully"
-	fmt.Print("Update data to database")
+}
+
+func responseReturn(status int, msg string, data []entity.User, w http.ResponseWriter) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	json.NewEncoder(w).Encode(response)
-
+	json.NewEncoder(w).Encode(entity.Response{Status: status, Message: msg, Data: data})
 }

@@ -25,7 +25,11 @@ func handleRequests() {
 	myRouter.HandleFunc("/user/{id}", service.GetUserById).Methods("GET")
 	myRouter.HandleFunc("/user/{id}", service.UpdateUser).Methods("PUT")
 	myRouter.HandleFunc("/user/{id}", service.DeleteUser).Methods("DELETE")
-	log.Fatal(http.ListenAndServe(":8081", myRouter))
+	myRouter.HandleFunc("/orders", service.CreateOrder).Methods("POST")
+	myRouter.HandleFunc("/orders", service.GetOrder).Methods("GET")
+	myRouter.HandleFunc("/orders/{id}", service.UpdateOrder).Methods("PUT")
+	myRouter.HandleFunc("/orders/{id}", service.DeleteOrder).Methods("DELETE")
+	log.Fatal(http.ListenAndServe(":8084", myRouter))
 }
 
 func main() {

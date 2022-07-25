@@ -1,6 +1,8 @@
 package config
 
-import "database/sql"
+import (
+	"database/sql"
+)
 
 func Connect() *sql.DB {
 	dbDriver := "mysql"
@@ -8,10 +10,12 @@ func Connect() *sql.DB {
 	dbPass := "admin12345"
 	dbName := "testdb"
 
-	db, err := sql.Open(dbDriver, dbUser+":"+dbPass+"@/"+dbName)
+	db, err := sql.Open(dbDriver, dbUser+":"+dbPass+"@/"+dbName+"?parseTime=true")
 
 	if err != nil {
 		panic(err.Error())
 	}
+
 	return db
+
 }
