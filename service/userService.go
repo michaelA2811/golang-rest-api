@@ -8,8 +8,11 @@ import (
 	"strconv"
 	"test-api/config"
 	"test-api/entity"
+	"time"
 
+	"github.com/golang-jwt/jwt"
 	"github.com/gorilla/mux"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func AllUser(w http.ResponseWriter, r *http.Request) {
@@ -77,32 +80,36 @@ func GetUserById(w http.ResponseWriter, r *http.Request) {
 }
 
 func NewUser(w http.ResponseWriter, r *http.Request) {
-	var response entity.Response
+	// var response entity.Response
+	var user entity.User
 
 	db := config.Connect()
-
-	err := r.ParseMultipartForm(4096)
-	if err != nil {
-		panic(err)
-	}
-	username := r.FormValue("username")
-	email := r.FormValue("email")
-	password := r.FormValue("password")
-	age := r.FormValue("age")
-
-	_, err = db.Exec("INSERT INTO users(username,email,password,age) VALUES(?,?,?,?)", username, email, password, age)
-
-	if err != nil {
-		log.Print(err)
-		return
-	}
-	response.Status = 200
-	response.Message = "Insert data successfully"
-	fmt.Print("Insert data to database")
+	defer db.Close()
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	json.NewEncoder(w).Encode(response)
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&user)
+
+	if err != nil {
+		responseReturn(501, "Error Encoding JSON", []entity.User{}, w)
+	}
+
+	bs, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.MinCost)
+	if err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	rows, err := db.Exec("INSERT INTO users(username,email,password,age,created_at) VALUES(?,?,?,?,?)", user.Username, user.Email, bs, user.Age, time.Now())
+	if err != nil {
+		responseReturn(501, "Error Encoding JSON", []entity.User{}, w)
+	}
+
+	insertUser, _ := rows.LastInsertId()
+	user.Id = int(insertUser)
+	user.CreatedAt = time.Now()
+
+	responseReturn(200, "User Created", []entity.User{user}, w)
 }
 
 func DeleteUser(w http.ResponseWriter, r *http.Request) {
@@ -156,6 +163,66 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	responseReturn(200, "Success Update User", []entity.User{}, w)
 
+}
+
+func LoginUser(w http.ResponseWriter, r *http.Request) {
+	var creds entity.Credentials
+	var user entity.User
+	var jwtKey = []byte("my_secret_key")
+
+	db := config.Connect()
+	defer db.Close()
+
+	err := json.NewDecoder(r.Body).Decode(&creds)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	rows, err := db.Query("SELECT username,password FROM users WHERE username=?", creds.Username)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	for rows.Next() {
+		err = rows.Scan(&user.Username, &user.Password)
+		if err != nil {
+			log.Fatal(err.Error())
+		}
+	}
+	fmt.Println(user.Password)
+
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(creds.Password))
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	expirationTime := time.Now().Add(5 * time.Minute)
+	claims := &entity.Claims{
+		Username: creds.Username,
+		StandardClaims: jwt.StandardClaims{
+			// In JWT, the expiry time is expressed as unix milliseconds
+			ExpiresAt: expirationTime.Unix(),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString(jwtKey)
+	if err != nil {
+		// If there is an error in creating the JWT return an internal server error
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Write([]byte(tokenString))
+
+	// http.SetCookie(w, &http.Cookie{
+	// 	Name:    "token",
+	// 	Value:   tokenString,
+	// 	Expires: expirationTime,
+	// })
 }
 
 func responseReturn(status int, msg string, data []entity.User, w http.ResponseWriter) {
